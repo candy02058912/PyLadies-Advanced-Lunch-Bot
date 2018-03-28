@@ -1,4 +1,6 @@
 # encoding: utf-8
+import apiai
+import json
 import os
 import random
 import requests
@@ -22,8 +24,9 @@ app = Flask(__name__)
 
 # 使用環境變數，才不會外洩秘密
 GOOGLE_API_KEY = os.environ['GOOGLE_API_KEY']
-handler = WebhookHandler(os.environ['CHANNEL_SECRET']) 
-line_bot_api = LineBotApi(os.environ['CHANNEL_ACCESS_TOKEN']) 
+handler = WebhookHandler(os.environ['CHANNEL_SECRET'])
+line_bot_api = LineBotApi(os.environ['CHANNEL_ACCESS_TOKEN'])
+ai = apiai.ApiAI(os.environ['DIALOGFLOW_CLIENT_ACCESS_TOKEN'])
 
 @app.route('/')
 def index():
@@ -49,14 +52,41 @@ def callback():
 # ================= 機器人區塊 Start =================
 @handler.add(MessageEvent, message=TextMessage)  # default
 def handle_text_message(event):                  # default
-    msg = event.message.text #message from user
+    msg = event.message.text # message from user
+    uid = event.source.user_id # user id
+    # 1. 傳送使用者輸入到 dialogflow 上
+    ai_request = ai.text_request()
+    ai_request.lang = "zh-CN"
+    ai_request.session_id = uid
+    ai_request.query = msg
 
-    # 針對使用者各種訊息的回覆 Start =========
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=msg))
+    # 2. 獲得使用者的意圖
+    ai_response = json.loads(ai_request.getresponse().read())
+    user_intent = ai_response['result']['metadata']['intentName']
 
-    # 針對使用者各種訊息的回覆 End =========
+    # 3. 根據使用者的意圖做相對應的回答
+    if user_intent == "WhatToEatForLunch": # 當使用者意圖為詢問午餐時
+        # 建立一個 button 的 template
+        buttons_template_message = TemplateSendMessage(
+            alt_text="請告訴我你在哪兒",
+            template=ButtonsTemplate(
+                text="請告訴我你在哪兒",
+                actions=[
+                    URITemplateAction(
+                        label="傳送我的位置訊息",
+                        uri="line://nv/location"
+                    )
+                ]
+            )
+        )
+        line_bot_api.reply_message(
+            event.reply_token,
+            buttons_template_message)
+    else: # 聽不懂時的回答
+        msg = "抱歉，我聽不懂你在說什麼"
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=msg))
 
 @handler.add(MessageEvent, message=LocationMessage)
 def handle_location_message(event):
