@@ -11,6 +11,7 @@ from linebot.exceptions import (
 )
 from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage,
+    LocationMessage,
 )
 
 
@@ -53,6 +54,17 @@ def handle_text_message(event):                  # default
 
     # 針對使用者各種訊息的回覆 End =========
 
+@handler.add(MessageEvent, message=LocationMessage)
+def handle_location_message(event):
+    # 獲取使用者的經緯度
+    lat = event.message.latitude
+    long = event.message.longitude
+    msg = "lat: {}; long: {}".format(lat, long)
+    
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=msg))
+ 
 # ================= 機器人區塊 End =================
 
 if __name__ == "__main__":
